@@ -65,7 +65,7 @@ print(df['Indicator Name'].unique())
 selected_year = 2015
 
 
-def transfrom_df(df, year):
+def transform_df(df, year):
     '''
         Takes a dataframe and year and transforms it into a format ready for clustering which
         contains only data for the selected year
@@ -85,7 +85,7 @@ def transfrom_df(df, year):
     return tran_df
 
 
-tran_df = transfrom_df(df, selected_year)
+tran_df = transform_df(df, selected_year)
 
 # Lets take a look at the tranformed dataframe and observe all countries in our dataset
 print(tran_df.head())
@@ -313,7 +313,7 @@ get_optimal_k(clu_df, var_ind)
 
 # lets compare this with 25 years ago
 for year in [1990]:
-    tran_df = transfrom_df(df, year)
+    tran_df = transform_df(df, year)
     clu_df = clean_df(tran_df, int_ind)
     clu_df['CO2 production per head'] = clu_df['CO2 emissions (kt)']/clu_df['Population, total']
     
@@ -461,7 +461,6 @@ plot_predicted_value(lux_GDP, 1960, 2031, exponential, 'GDP per capita (current 
 
 
 
-
 # initial guess for logistic function coefficients
 log_p0 = (3e12, 0.03, 2000.0)
 
@@ -473,5 +472,8 @@ sigma = np.sqrt(np.diag(covar))
 
 
 plot_predicted_value(lux_GDP, 1960, 2031, logistic, 'GDP per capita (current US$)', param, sigma)
+
+
+
 
 
