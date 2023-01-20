@@ -279,3 +279,199 @@ print(cluster_1.head())
 
 cluster_0 = clustered_df[clustered_df['cluster'] == 0]
 print(cluster_0.head())
+
+
+#check if this is the optimal numbers of clusters
+def get_optimal_k(df, indicators):
+    '''
+        uses the elbow method to find optimal number of clusters 
+        
+        Args:
+            df => pandas.Dataframe, clustered dataframe to be visualize
+            centroid_df => pandas.Dataframe, dataframe to be transformed
+            k => int, number of clusters
+            x => first indicator
+            y => second indicator
+        Returns:
+             grapgh => scatterplot
+    '''
+    sse = []
+    k_rng = range(1,11)
+    for k in k_rng:
+        km = KMeans(n_clusters=k)
+        km.fit(df[indicators])
+        sse.append(km.inertia_)
+    
+    plt.xlabel('K')
+    plt.ylabel('Sum of squared error')
+    plt.plot(k_rng,sse)
+    plt.show()
+
+
+get_optimal_k(clu_df, var_ind)
+
+
+# lets compare this with 25 years ago
+for year in [1990]:
+    tran_df = transfrom_df(df, year)
+    clu_df = clean_df(tran_df, int_ind)
+    clu_df['CO2 production per head'] = clu_df['CO2 emissions (kt)']/clu_df['Population, total']
+    
+    plot_colors = ['#FAC012', 'black', '#2F528F']
+    clustered_df, centroid_df = cluster_dataframe(clu_df, 3, var_ind)
+    clustered_df.to_csv(f'Femi Cluster year {year}.csv')
+    
+    # visualize dataset on scatter plot after clustering
+    visualize_clusters(clustered_df, centroid_df, 3, plot_colors, 'CO2 production per head',  'GDP per capita (current US$)', year)
+    visualize_clusters(clustered_df, centroid_df, 3, plot_colors, 'Renewable energy consumption (% of total final energy consumption)', 'GDP per capita (current US$)', year)
+    visualize_clusters(clustered_df, centroid_df, 3, plot_colors, 'CO2 emissions (kg per PPP $ of GDP)', 'GDP per capita (current US$)', year)
+    
+    cluster_stat = get_cluster_stat(clustered_df)
+    cluster_stat.to_csv(f'Femi cluster_stat year {year}.csv')
+    
+    #let take a look at a few countries in each clusters
+    cluster_2 = clustered_df[clustered_df['cluster'] == 2]
+    print(cluster_2.head())
+
+    cluster_1 = clustered_df[clustered_df['cluster'] == 1]
+    print(cluster_1.head())
+
+    cluster_0 = clustered_df[clustered_df['cluster'] == 0]
+    print(cluster_0.head())
+        
+ 
+
+def get_fit_data(df, country, Indicator):
+    '''
+        transfroms original dataframe to format ready for fitting
+        
+        Args:
+            df => pandas.Dataframe, original dataframe
+            country => str, conutry of interest
+            Indicator => str, indicator of interest
+        Returns:
+             fit_df => pandas.Dataframe
+    '''
+    fit_df = df[(df['Country Name'] == country) & (df['Indicator Name'] == Indicator)]
+    fit_df = fit_df.drop(['Country Name', 'Country Code', 'Indicator Name', 'Indicator Code'], axis=1).T
+    fit_df = fit_df.reset_index()
+    fit_df.columns = ['Year', Indicator]
+    return fit_df
+
+
+# get Luxemborg GDP trend
+country = 'Luxembourg'
+lux_GDP = get_fit_data(df, country, 'GDP per capita (current US$)')
+print(lux_GDP.head())
+
+
+def exponential(t, n0, g):
+    '''Calculates exponential function with scale factor n0 and growth rate g.'''
+    t = t - 1960.0
+    f = n0 * np.exp(g*t)
+    return f
+
+
+def logistic(t, n0, g, t0):
+    '''Calculates the logistic function with scale factor n0 and growth rate g'''
+    f = n0 / (1 + np.exp(-g*(t - t0)))
+    return f
+
+
+def fit_function(df, indicator, fx, p0):
+    '''
+        fit function into dataset
+        Args:
+            df => pandas.Dataframe, original dataframe
+            Indicator => str, indicator of interest
+            fx => callable, function to fit
+            p0 => tuple, initial guess of coefficients
+        Returns:
+             param => nd.array, function parameters
+             covar => nd.array, std for function
+        
+    '''
+    newdf = df.copy()
+    newdf['Year'] = pd.to_numeric(newdf['Year'])
+    param, covar = opt.curve_fit(fx, newdf['Year'], newdf[indicator], p0=p0)
+    return param, covar
+
+
+def plot_fitted_function(df, fx, indicator):
+    '''
+        plot fitted function and original data
+        Args:
+            df => pandas.Dataframe, original dataframe
+            Indicator => str, indicator of interest
+            fx => callable, function to fit
+        
+    '''
+    newdf = df.copy()
+    newdf['Year'] = pd.to_numeric(newdf['Year'])
+    newdf['fit'] = fx(newdf['Year'], *param)
+    newdf.plot('Year', [indicator, 'fit'])
+    plt.title(f'GDP per Capita trend for {country}')
+    plt.show()
+
+
+def plot_predicted_value(df, start_year, end_year, fit_function, y_var, param, sigma):
+    """
+    Plots the future values of a variable using an exponential function and error ranges.
+    
+    Args:
+        df => dataframe, Dataframe containing the data
+        start_year => int, Starting year for the forecast
+        end_year => int, Ending year for the forecast
+        fit_function => callable, fitting function for forecast
+        y_var => str, Column name of the variable to be plotted
+        param  =>tuple, Parameters of the function
+        sigma => tuple, Standard deviation of the parameters
+    """
+    newdf = df.copy()
+    newdf['Year'] = pd.to_numeric(newdf['Year'])
+    year = np.arange(start_year, end_year)
+    forecast = fit_function(year, *param)
+    
+    low, up = err.err_ranges(year, fit_function, param, sigma)
+    
+    plt.figure()
+    plt.plot(newdf['Year'], newdf[y_var], label=y_var)
+    plt.plot(year, forecast, label="forecast")
+    plt.fill_between(year, low, up, color="yellow", alpha=0.7)
+    plt.xlabel('Year')
+    plt.ylabel(y_var)
+    plt.title(f'GDP per Capita forecast for {country}')
+    plt.legend()
+    plt.show()
+
+# initial guess for exp function coefficients
+exp_p0 = (73233967692.102798, 0.03)
+
+# fit exp function
+param, covar = fit_function(lux_GDP, 'GDP per capita (current US$)', exponential, exp_p0 )
+
+# plot fitting and original data set
+plot_fitted_function(lux_GDP, exponential, 'GDP per capita (current US$)')
+
+sigma = np.sqrt(np.diag(covar))
+
+
+plot_predicted_value(lux_GDP, 1960, 2031, exponential, 'GDP per capita (current US$)', param, sigma)
+
+
+
+
+
+# initial guess for logistic function coefficients
+log_p0 = (3e12, 0.03, 2000.0)
+
+param, covar = fit_function(lux_GDP, 'GDP per capita (current US$)', logistic, log_p0 )
+plot_fitted_function(lux_GDP, logistic, 'GDP per capita (current US$)')
+
+
+sigma = np.sqrt(np.diag(covar))
+
+
+plot_predicted_value(lux_GDP, 1960, 2031, logistic, 'GDP per capita (current US$)', param, sigma)
+
+
